@@ -1,0 +1,282 @@
+#!/bin/bash
+#
+# mincg (Material Icon New Color Generator) allows you to create a new mateial
+#  icon package with another base color.
+#
+# Copyright (c) 2017 Fernando Anthony Ristaño aka Drakor
+# 
+# This program is free software: you can redistribute it and/or modify  
+# it under the terms of the GNU General Public License as published by  
+# the Free Software Foundation, version 3.
+#
+# This program is distributed in the hope that it will be useful, but 
+# WITHOUT ANY WARRANTY; without even the implied warranty of 
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU 
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License 
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
+#
+
+SCRIPT_NAME="mincg"
+BASE_COLOR="white"
+BASE_COLOR_CODE="#FFFFFF"
+DEBUG=false
+WGET=false
+VERBOSE=false
+VERY_VERBOSE=false
+CODE_COLOR=""
+NEW_NAME=""
+ICON_NAME=""
+SIZE=""
+SOURCE_NAME=""
+
+if ((BASH_VERSINFO[0] < 4))
+then 
+  echo "Sorry, you need at least bash-4.0 to run this script." 
+  exit 1 
+fi
+
+################################################################################
+# Check if a command is available, showing an error if not
+# Globals:
+#   None
+# Arguments:
+#   Command name
+# Returns:
+#   None
+################################################################################
+function command_available {
+    if !(command -v "$1" >/dev/null 2>&1); then
+        echo >&2 "[$1] is required, but it's not installed."
+        exit 1
+    fi
+}
+
+################################################################################
+# Check if the minimun parameters are setted by user
+# Globals:
+#   NEW_NAME
+#   CODE_COLOR
+#   ICON_NAME
+# Arguments:
+#   None
+# Returns:
+#   None
+################################################################################
+function check_min_parameters {
+    if [ -z "$NEW_NAME" ]; then
+        echo >&2 "I need of the new icon package. Please see the help(-h|--help)."
+        exit 1
+    fi
+    if [ -z "$CODE_COLOR" ]; then
+        echo >&2 "I need of the new color to paint. Please see the help(-h|--help)."
+        exit 1
+    fi
+
+    if [ -z "$ICON_NAME" ]; then
+        echo >&2 "I need the directory to work on. Please see the help(-h|--help)."
+        exit 1
+    fi
+}
+
+################################################################################
+# Process a material icon directory, copying and renaming it, apply new colors 
+#  and process json files
+# Globals:
+#   SOURCE_NAME
+#   BASE_COLOR
+#   NEW_NAME
+#   DEBUG
+#   BASE_COLOR_CODE
+#  CODE_COLOR
+# Arguments:
+#   New directory name
+# Returns:
+#   None
+################################################################################
+function process_directory {
+    cp -rf $SOURCE_NAME "$1"
+    export COMM='find '$1' -depth -type d -iname '\''*'$BASE_COLOR'*'\'' -exec bash -c "mv \"\$1\" \"\$(sed 's/$BASE_COLOR/$NEW_NAME/' <<< \"\$1\")\";" - '{}' \;'
+    if $DEBUG; then echo "DEBUG: I run this: $COMM"; fi
+    eval $COMM;
+
+    export COMM='find '$1' -depth -iname "*'$BASE_COLOR'*.png" -exec bash -c "convert \"\$1\" -fuzz 100% -fill '\''#'$CODE_COLOR\'' -opaque '\'$BASE_COLOR_CODE\'' \"\$(sed 's/$BASE_COLOR/$NEW_NAME/' <<< \"\$1\")\"; rm \"\$1\"" - '{}' \;'
+    if $DEBUG; then echo "DEBUG: I run this now: $COMM"; fi
+    eval $COMM;
+    
+    export COMM='find '$1' -depth -iname "*.json" -exec bash -c "sed -i -e \"'s/$BASE_COLOR/$NEW_NAME/g'\" \"\$1\";" - '{}' \;'
+    if $DEBUG; then echo "DEBUG: I edit the json: $COMM"; fi
+    eval $COMM;
+}
+
+
+###########################
+## Main
+###########################
+if [ -z "$1" ]; then
+    echo "Local Usage: $SCRIPT_NAME [OPTIONS] COLORNAME COLORCODE DIRECTORY"
+    echo "Online Usage: $SCRIPT_NAME [OPTIONS] COLORNAME COLORCODE ICONNAME SIZE"
+    echo "Try:   "$SCRIPT_NAME '--help'" for more information"
+    echo " "
+    exit 0
+fi
+
+while test $# -gt 0; do
+        case "$1" in
+            -h|--help)
+                    echo "Local Usage: $SCRIPT_NAME [OPTIONS] COLORNAME COLORCODE DIRECTORY"
+                    echo "Online Usage: $SCRIPT_NAME [OPTIONS] COLORNAME COLORCODE ICONNAME SIZE"
+                    echo " "
+                    echo "$SCRIPT_NAME (Material Icon New Color Generator) allows you to create a new mateial icon package with another base color."
+                    echo " "
+                    echo "A little explanation about the parameters:"
+                    echo "    COLORNAME:      Will replace the 'white' string in the new colored icon package"
+                    echo "    COLORCODE:      New color. Admit hexa code or rgb notation"
+                    echo "    DIRECTORY:      Is the directory of material icon package"
+                    echo "    ICONNAME:       Is the name of the material icon package"
+                    echo "    SIZE:           Is the size of the material icon (18, 24, 36, 48)"
+                    echo " "
+                    echo "Examples:"
+                    echo "$SCRIPT_NAME -b orange rgb(255, 132, 0) ic_hd_white_24dp"
+                    echo "$SCRIPT_NAME orange #FF8400 ic_hd_white_24dp"
+                    echo " "
+                    echo "options:"
+                    echo "        -h, --help       show brief help"
+                    echo "        -b               specify the source icon is black"
+                    echo "        -w               use wget instead curl. Only on online mode, offcourse."
+                    echo "        -D               Debug mode on! You will a lot of nasty thing mwahahaha."
+                    echo "        -v               verbose mode"
+                    echo "        -vv              very verbose mode"
+                    exit 0
+                    ;;
+            -b)
+                    export BASE_COLOR="black"
+                    export BASE_COLOR_CODE="#000000"
+                    shift
+                    ;;
+            -v)
+                    export VERBOSE=true
+                    shift
+                    ;;
+            -vv)
+                    export VERY_VERBOSE=true
+                    shift
+                    ;;
+            -w)
+                    export WGET=true
+                    shift
+                    ;;
+            -D)
+                    export DEBUG=true
+                    shift
+                    ;;
+            -*)
+                    echo >&2 "$1: Wrong option! Please read the help(-h|--help)."
+                    exit 1
+                    ;;
+            *)      if [ -z "$NEW_NAME" ]; then
+                        export NEW_NAME=$1
+                    else
+                        if [ -z "$CODE_COLOR" ]; then
+                            export CODE_COLOR=$1
+                        else
+                            if [ -z "$ICON_NAME" ]; then
+                                export ICON_NAME=${1,,}
+                            else
+                                if [ -z "$SIZE" ]; then
+                                    export SIZE=$1         
+                                else
+                                    echo >&2 "To many parameters... to many... Please see the help(-h|--help)."
+                                    exit 1
+                                fi
+                            fi
+                        fi
+                    fi
+                    shift
+                    ;;
+        esac
+done
+
+check_min_parameters
+command_available find
+command_available sed
+command_available convert
+ 
+if [ -z "$SIZE" ]; then
+    if $WGET; then
+        echo >&2 "Emmm... wget? for offline operation? I think you need to see the help(-h|--help)."
+        exit 1
+    fi
+    $SOURCE_NAME = $ICON_NAME
+    if ! [ -d "$SOURCE_NAME" ]; then
+        echo >&2 "\"$SOURCE_NAME\" not exists. I need a directory that really exists. Please feed me with good stuff."
+        exit 1
+    fi
+    
+    export dir_name="${ICON_NAME//$BASE_COLOR/$NEW_NAME}"
+    if $DEBUG; then echo "DEBUG: Finale name: $dir_name"; fi
+
+    if  [ -d "$dir_name" ]; then
+        echo >&2 "\"$dir_name\" exists!. You already have an icon package."
+        exit 1
+    fi
+    process_directory $dir_name
+    
+else
+    command_available unzip
+    if $WGET; then
+        command_available wget
+    else
+        command_available curl
+    fi
+    
+    export final_name='ic_'$ICON_NAME'_'$NEW_NAME'_'$SIZE'dp'
+    if $DEBUG; then echo "Finale name: $final_name"; fi
+    if  [ -d "$final_name" ]; then
+        echo >&2 "\"$final_name\" exists!. You already have an icon package."
+        exit 1
+    fi
+
+    export SOURCE_NAME='ic_'$ICON_NAME'_white_'$SIZE'dp'
+    if $DEBUG; then echo "Source name: $SOURCE_NAME"; fi
+    if  [ -d "$SOURCE_NAME" ]; then
+        echo >&2 "\"$SOURCE_NAME\" exists!. You already have an icon package."
+        exit 1
+    fi
+    
+    export source_name_zip=$SOURCE_NAME'.zip'
+    if $DEBUG; then echo "Source name zip: $source_name_zip"; fi
+    if  [ -f "$source_name_zip" ]; then
+        echo >&2 "\"$source_name_zip\" exists!. You already have an icon package."
+        exit 1
+    fi
+    
+    echo "Downloading $SOURCE_NAME"
+    export url="https://storage.googleapis.com/material-icons/external-assets/v4/icons/zip/$source_name_zip"
+    if $WGET; then
+        if [[ `wget -S --spider $url  2>&1 | grep 'HTTP/1.1 200 OK'` ]]; then
+            wget $url
+        else
+            echo >&2 "Well, the icon you want ($SOURCE_NAME) just not exists. Try with one different."
+            exit 1
+        fi
+    else
+        if curl --output /dev/null --silent --head --fail "$url"; then
+            curl -O  $url
+        else
+            echo >&2 "Well, the icon you want ($SOURCE_NAME) just not exists. Try with one different."
+            exit 1
+        fi
+    fi
+
+    echo "Extracting $source_name_zip..."
+    unzip -qq $SOURCE_NAME
+    
+    echo 'Changing color and generating ic_'$ICON_NAME'_'$NEW_NAME'_'$SIZE'dp'
+    process_directory $final_name
+
+fi
+
+
+
